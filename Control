@@ -1,0 +1,84 @@
+local VIM = game:GetService("VirtualInputManager")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+
+local function CreateMobileControls()
+    if game.CoreGui:FindFirstChild("MobileControls") then game.CoreGui.MobileControls:Destroy() end
+
+    local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+    ScreenGui.Name = "MobileControls"; ScreenGui.ResetOnSpawn = false; ScreenGui.IgnoreGuiInset = true 
+
+    -- [[ SETTINGS ]]
+    local kbVisible = true
+    local curPage = 1
+
+    -- [[ KEYPAD ]]
+    local MainFrame = Instance.new("Frame", ScreenGui)
+    MainFrame.Name = "Keypad"; MainFrame.BackgroundColor3 = Color3.new(0, 0, 0); MainFrame.Position = UDim2.new(0.5, -150, 0.1, 0); MainFrame.Size = UDim2.new(0, 320, 0, 140); MainFrame.BackgroundTransparency = 0.5; MainFrame.Active = true; MainFrame.Draggable = true
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+    local KeyGrid = Instance.new("UIGridLayout", MainFrame); KeyGrid.CellPadding = UDim2.new(0, 4, 0, 4); KeyGrid.CellSize = UDim2.new(0, 38, 0, 38); KeyGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    local function RenderKeys()
+        for _, v in pairs(MainFrame:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+        local p1 = {"Q","E","R","T","Y","U","P","F","G","H","J","K","L","Z","X","C","V","B","N","M"}
+        local p2 = {"1","2","3","4","5","6","7","8","9","0","=","+","(",")","/","!","?","[","]","{","}"}
+        local keys = (curPage == 1) and p1 or p2
+        for _, k in pairs(keys) do
+            local b = Instance.new("TextButton", MainFrame)
+            b.BackgroundColor3 = Color3.new(0,0,0); b.Text = k; b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.Code; b.TextSize = 18
+            b.TextTransparency = kbVisible and 0 or 1; b.BackgroundTransparency = kbVisible and 0.2 or 1
+            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+            b.MouseButton1Click:Connect(function() 
+                local code = Enum.KeyCode[k] or Enum.KeyCode.Slash
+                VIM:SendKeyEvent(true, code, false, game); task.wait(0.01); VIM:SendKeyEvent(false, code, false, game) 
+            end)
+        end
+    end
+    RenderKeys()
+
+    -- [[ TOP UTILITY BUTTONS ]]
+    local KbToggle = Instance.new("TextButton", ScreenGui); KbToggle.Size = UDim2.new(0, 100, 0, 30); KbToggle.Position = UDim2.new(0.5, -105, 0.1, -40); KbToggle.Text = "TOGGLE KB"; KbToggle.BackgroundColor3 = Color3.new(0,0,0); KbToggle.TextColor3 = Color3.new(1,1,1); KbToggle.BackgroundTransparency = 0.5; Instance.new("UICorner", KbToggle)
+    local PageBtn = Instance.new("TextButton", ScreenGui); PageBtn.Size = UDim2.new(0, 100, 0, 30); PageBtn.Position = UDim2.new(0.5, 5, 0.1, -40); PageBtn.Text = "PAGE 1"; PageBtn.BackgroundColor3 = Color3.new(0,0,0); PageBtn.TextColor3 = Color3.new(1,1,1); PageBtn.BackgroundTransparency = 0.5; Instance.new("UICorner", PageBtn)
+
+    KbToggle.MouseButton1Click:Connect(function()
+        kbVisible = not kbVisible
+        TweenService:Create(MainFrame, TweenInfo.new(0.3), {BackgroundTransparency = kbVisible and 0.5 or 1}):Play()
+        for _, v in pairs(MainFrame:GetChildren()) do if v:IsA("TextButton") then TweenService:Create(v, TweenInfo.new(0.3), {TextTransparency = kbVisible and 0 or 1, BackgroundTransparency = kbVisible and 0.2 or 1}):Play() end end
+    end)
+
+    PageBtn.MouseButton1Click:Connect(function() curPage = (curPage == 1) and 2 or 1; PageBtn.Text = "PAGE "..curPage; RenderKeys() end)
+
+    -- [[ MAIN ACTION BUTTONS ]]
+    local AtkBtn = Instance.new("TextButton", ScreenGui); AtkBtn.Position = UDim2.new(0.65, 0, 0.6, 0); AtkBtn.Size = UDim2.new(0, 100, 0, 100); AtkBtn.Text = "ATTACK"; AtkBtn.TextColor3 = Color3.new(1,1,1); AtkBtn.BackgroundColor3 = Color3.new(0,0,0); AtkBtn.BackgroundTransparency = 0.5; AtkBtn.Modal = true; Instance.new("UICorner", AtkBtn).CornerRadius = UDim.new(1, 0)
+    local JumpBtn = Instance.new("TextButton", ScreenGui); JumpBtn.Position = UDim2.new(0.82, 0, 0.6, 0); JumpBtn.Size = UDim2.new(0, 100, 0, 100); JumpBtn.Text = "JUMP"; JumpBtn.TextColor3 = Color3.new(1,1,1); JumpBtn.BackgroundColor3 = Color3.new(0,0,0); JumpBtn.BackgroundTransparency = 0.5; JumpBtn.Modal = true; Instance.new("UICorner", JumpBtn).CornerRadius = UDim.new(1, 0)
+
+    AtkBtn.MouseButton1Down:Connect(function() VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0) end)
+    AtkBtn.MouseButton1Up:Connect(function() VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0) end)
+    JumpBtn.MouseButton1Down:Connect(function() VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game) end)
+    JumpBtn.MouseButton1Up:Connect(function() VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game) end)
+
+    -- [[ MAROON JOYSTICK ]]
+    local JoyFrame = Instance.new("Frame", ScreenGui); JoyFrame.Size = UDim2.new(0, 130, 0, 130); JoyFrame.Position = UDim2.new(0.05, 0, 0.55, 0); JoyFrame.BackgroundColor3 = Color3.fromRGB(90, 15, 15); JoyFrame.BackgroundTransparency = 0.5; Instance.new("UICorner", JoyFrame).CornerRadius = UDim.new(1, 0)
+    local Stick = Instance.new("TextButton", JoyFrame); Stick.Size = UDim2.new(0, 70, 0, 70); Stick.AnchorPoint = Vector2.new(0.5, 0.5); Stick.Position = UDim2.new(0.5, 0, 0.5, 0); Stick.BackgroundColor3 = Color3.new(1, 1, 1); Stick.BackgroundTransparency = 0.2; Stick.Text = ""; Stick.Modal = true; Instance.new("UICorner", Stick).CornerRadius = UDim.new(1, 0)
+
+    local dragging, dInput, dStart, sPos = false, nil, nil, nil
+    local curKeys = {W = false, A = false, S = false, D = false}
+    local function upKeys(nk) for k, v in pairs(nk) do if curKeys[k] ~= v then curKeys[k] = v; VIM:SendKeyEvent(v, Enum.KeyCode[k], false, game) end end end
+    Stick.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dStart = i.Position; sPos = Stick.Position; dInput = i local c; c = i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then dragging = false; Stick.Position = UDim2.new(0.5,0,0.5,0); upKeys({W=false,A=false,S=false,D=false}); c:Disconnect() end end) end end)
+    Stick.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement) then dInput = i end end)
+    RunService.RenderStepped:Connect(function()
+        if dragging and dInput then
+            local delta = dInput.Position - dStart; Stick.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + delta.X, sPos.Y.Scale, sPos.Y.Offset + delta.Y)
+            local diff = (Stick.AbsolutePosition + Stick.AbsoluteSize/2) - (JoyFrame.AbsolutePosition + JoyFrame.AbsoluteSize/2)
+            local dir = (diff.Magnitude > 20) and diff.Unit or Vector2.new(0,0)
+            upKeys({W = dir.Y < -0.35, S = dir.Y > 0.35, A = dir.X < -0.35, D = dir.X > 0.35})
+        end
+    end)
+    
+    Workspace.CurrentCamera.FieldOfView = 80
+end
+
+CreateMobileControls()
