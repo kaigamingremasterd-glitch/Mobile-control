@@ -1,0 +1,202 @@
+local VIM = game:GetService("VirtualInputManager")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local function CreateMobileControls()
+    if game.CoreGui:FindFirstChild("MobileControls") then game.CoreGui.MobileControls:Destroy() end
+
+    local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+    ScreenGui.Name = "MobileControls"; ScreenGui.ResetOnSpawn = false; ScreenGui.IgnoreGuiInset = true 
+
+    -- [[ SETTINGS ]]
+    local kbVisible = true
+    local curPage = 1
+    local slActive = false
+    local slUIEnabled = true 
+    local plusModeActive = false
+    
+    local OFF_IMAGE = "rbxthumb://type=Asset&id=96626283543203&w=150&h=150"
+    local ON_IMAGE = "rbxthumb://type=Asset&id=83782317765525&w=150&h=150"
+
+    -- [[ KEYPAD MAIN FRAME ]]
+    local MainFrame = Instance.new("Frame", ScreenGui)
+    MainFrame.Name = "Keypad"; MainFrame.BackgroundColor3 = Color3.new(0, 0, 0); MainFrame.Position = UDim2.new(0.5, -150, 0.1, 0); MainFrame.Size = UDim2.new(0, 320, 0, 160); MainFrame.BackgroundTransparency = 0.5; MainFrame.Active = true; MainFrame.Draggable = true
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+    
+    -- Sub-frame to hold keys so the Grid Layout doesn't mess with the Plus Button
+    local KeyContainer = Instance.new("Frame", MainFrame)
+    KeyContainer.Name = "KeyContainer"; KeyContainer.Size = UDim2.new(1, 0, 1, -10); KeyContainer.BackgroundTransparency = 1
+    
+    local KeyGrid = Instance.new("UIGridLayout", KeyContainer)
+    KeyGrid.CellPadding = UDim2.new(0, 4, 0, 4); KeyGrid.CellSize = UDim2.new(0, 38, 0, 38); KeyGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    -- [[ FLOATING KEY GENERATOR ]]
+    local function CreateFloatingKey(keyName)
+        local dragLocked = false
+        local keyCode = Enum.KeyCode[keyName] or Enum.KeyCode.Slash
+        
+        local FloatBtn = Instance.new("TextButton", ScreenGui)
+        FloatBtn.Name = "FloatKey_" .. keyName
+        FloatBtn.Size = UDim2.new(0, 55, 0, 55); FloatBtn.Position = UDim2.new(0.4, 0, 0.4, 0)
+        FloatBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); FloatBtn.BackgroundTransparency = 0.2; FloatBtn.Text = keyName; FloatBtn.TextColor3 = Color3.new(1, 1, 1); FloatBtn.Font = Enum.Font.Code; FloatBtn.TextSize = 22
+        Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(0, 8)
+
+        local Del = Instance.new("TextButton", FloatBtn)
+        Del.Size = UDim2.new(0, 20, 0, 20); Del.Position = UDim2.new(1, -12, 0, -8); Del.BackgroundColor3 = Color3.fromRGB(200, 0, 0); Del.Text = "X"; Del.TextColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", Del).CornerRadius = UDim.new(1, 0)
+        Del.MouseButton1Click:Connect(function() FloatBtn:Destroy() end)
+
+        local Lock = Instance.new("TextButton", FloatBtn)
+        Lock.Size = UDim2.new(0, 20, 0, 20); Lock.Position = UDim2.new(0, -8, 1, -12); Lock.BackgroundColor3 = Color3.fromRGB(0, 120, 255); Lock.Text = "L"; Lock.TextColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", Lock).CornerRadius = UDim.new(1, 0)
+        Lock.MouseButton1Click:Connect(function()
+            dragLocked = not dragLocked
+            Lock.BackgroundColor3 = dragLocked and Color3.fromRGB(80, 80, 80) or Color3.fromRGB(0, 120, 255)
+        end)
+
+        FloatBtn.MouseButton1Click:Connect(function()
+            VIM:SendKeyEvent(true, keyCode, false, game); task.wait(0.01); VIM:SendKeyEvent(false, keyCode, false, game)
+        end)
+
+        local dragging, dragStart, startPos
+        FloatBtn.InputBegan:Connect(function(input)
+            if not dragLocked and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
+                dragging = true; dragStart = input.Position; startPos = FloatBtn.Position
+                input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+            end
+        end)
+        UIS.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+                local delta = input.Position - dragStart
+                FloatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
+
+    -- [[ KEY RENDERER (FIXED GHOSTING) ]]
+    local function RenderKeys()
+        for _, v in pairs(KeyContainer:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+        local p1 = {"Q","E","R","T","Y","U","P","F","G","H","J","K","L","Z","X","C","V","B","N","M"}
+        local p2 = {"1","2","3","4","5","6","7","8","9","0","=","+","(",")","/","!","?","[","]","{","}"}
+        local keys = (curPage == 1) and p1 or p2
+        
+        for _, k in pairs(keys) do
+            local b = Instance.new("TextButton", KeyContainer)
+            b.BackgroundColor3 = Color3.new(0,0,0); b.Text = k; b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.Code; b.TextSize = 18
+            
+            -- FIX: Apply current transparency immediately to prevent ghosting when switching pages
+            b.TextTransparency = kbVisible and 0 or 1
+            b.BackgroundTransparency = kbVisible and 0.2 or 1
+            
+            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+            b.MouseButton1Click:Connect(function() 
+                if plusModeActive then CreateFloatingKey(k) else
+                    local code = Enum.KeyCode[k] or Enum.KeyCode.Slash
+                    VIM:SendKeyEvent(true, code, false, game); task.wait(0.01); VIM:SendKeyEvent(false, code, false, game) 
+                end
+            end)
+        end
+    end
+
+    -- [[ THE PLUS BUTTON (Bottom Right & Small) ]]
+    local PlusBtn = Instance.new("TextButton", MainFrame)
+    PlusBtn.Name = "PlusBtn"
+    PlusBtn.Size = UDim2.new(0, 25, 0, 25)
+    PlusBtn.Position = UDim2.new(1, -30, 1, -30) -- Bottom Right
+    PlusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); PlusBtn.Text = "+"; PlusBtn.TextColor3 = Color3.new(1,1,1); PlusBtn.TextSize = 18
+    Instance.new("UICorner", PlusBtn)
+    
+    PlusBtn.MouseButton1Click:Connect(function()
+        plusModeActive = not plusModeActive
+        PlusBtn.BackgroundColor3 = plusModeActive and Color3.new(1,1,1) or Color3.fromRGB(40, 40, 40)
+        PlusBtn.TextColor3 = plusModeActive and Color3.new(0,0,0) or Color3.new(1,1,1)
+    end)
+    
+    RenderKeys()
+
+    -- [[ UTILITY BUTTONS ]]
+    local KbToggle = Instance.new("TextButton", ScreenGui); KbToggle.Size = UDim2.new(0, 100, 0, 30); KbToggle.Position = UDim2.new(0.5, -155, 0.1, -40); KbToggle.Text = "TOGGLE KB"; KbToggle.BackgroundColor3 = Color3.new(0,0,0); KbToggle.TextColor3 = Color3.new(1,1,1); KbToggle.BackgroundTransparency = 0.5; Instance.new("UICorner", KbToggle)
+    local PageBtn = Instance.new("TextButton", ScreenGui); PageBtn.Size = UDim2.new(0, 100, 0, 30); PageBtn.Position = UDim2.new(0.5, -50, 0.1, -40); PageBtn.Text = "PAGE 1"; PageBtn.BackgroundColor3 = Color3.new(0,0,0); PageBtn.TextColor3 = Color3.new(1,1,1); PageBtn.BackgroundTransparency = 0.5; Instance.new("UICorner", PageBtn)
+    local SlToggle = Instance.new("TextButton", ScreenGui); SlToggle.Size = UDim2.new(0, 110, 0, 30); SlToggle.Position = UDim2.new(0.5, 55, 0.1, -40); SlToggle.Text = "TOGGLE SHIFTLOCK"; SlToggle.BackgroundColor3 = Color3.new(0,0,0); SlToggle.TextColor3 = Color3.new(1,1,1); SlToggle.BackgroundTransparency = 0.5; SlToggle.TextSize = 10; Instance.new("UICorner", SlToggle)
+
+    -- [[ SHIFTLOCK ICON ]]
+    local SlIconBtn = Instance.new("ImageButton", ScreenGui)
+    SlIconBtn.Size = UDim2.new(0, 60, 0, 60); SlIconBtn.Position = UDim2.new(0.85, 0, 0.45, 0); SlIconBtn.BackgroundTransparency = 1; SlIconBtn.Image = OFF_IMAGE; SlIconBtn.ScaleType = Enum.ScaleType.Fit
+
+    SlToggle.MouseButton1Click:Connect(function()
+        slUIEnabled = not slUIEnabled
+        local targetAlpha = slUIEnabled and 0 or 1
+        if not slUIEnabled then slActive = false; SlIconBtn.Active = false else SlIconBtn.Active = true end
+        TweenService:Create(SlIconBtn, TweenInfo.new(0.5), {ImageTransparency = targetAlpha}):Play()
+    end)
+
+    SlIconBtn.MouseButton1Click:Connect(function() if slUIEnabled then slActive = not slActive; SlIconBtn.Image = slActive and ON_IMAGE or OFF_IMAGE end end)
+
+    -- Toggle Keyboard Logic
+    KbToggle.MouseButton1Click:Connect(function()
+        kbVisible = not kbVisible
+        TweenService:Create(MainFrame, TweenInfo.new(0.3), {BackgroundTransparency = kbVisible and 0.5 or 1}):Play()
+        TweenService:Create(PlusBtn, TweenInfo.new(0.3), {BackgroundTransparency = kbVisible and 0 or 1, TextTransparency = kbVisible and 0 or 1}):Play()
+        for _, v in pairs(KeyContainer:GetChildren()) do 
+            if v:IsA("TextButton") then 
+                TweenService:Create(v, TweenInfo.new(0.3), {TextTransparency = kbVisible and 0 or 1, BackgroundTransparency = kbVisible and 0.2 or 1}):Play() 
+            end 
+        end
+    end)
+
+    PageBtn.MouseButton1Click:Connect(function() curPage = (curPage == 1) and 2 or 1; PageBtn.Text = "PAGE "..curPage; RenderKeys() end)
+
+    -- [[ ATTACK / JUMP ]]
+    local AtkBtn = Instance.new("TextButton", ScreenGui); AtkBtn.Position = UDim2.new(0.65, 0, 0.6, 0); AtkBtn.Size = UDim2.new(0, 100, 0, 100); AtkBtn.Text = "ATTACK"; AtkBtn.TextColor3 = Color3.new(1,1,1); AtkBtn.BackgroundColor3 = Color3.new(0,0,0); AtkBtn.BackgroundTransparency = 0.5; AtkBtn.Modal = true; Instance.new("UICorner", AtkBtn).CornerRadius = UDim.new(1, 0)
+    local JumpBtn = Instance.new("TextButton", ScreenGui); JumpBtn.Position = UDim2.new(0.82, 0, 0.6, 0); JumpBtn.Size = UDim2.new(0, 100, 0, 100); JumpBtn.Text = "JUMP"; JumpBtn.TextColor3 = Color3.new(1,1,1); JumpBtn.BackgroundColor3 = Color3.new(0,0,0); JumpBtn.BackgroundTransparency = 0.5; JumpBtn.Modal = true; Instance.new("UICorner", JumpBtn).CornerRadius = UDim.new(1, 0)
+
+    AtkBtn.MouseButton1Down:Connect(function() VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0) end)
+    AtkBtn.MouseButton1Up:Connect(function() VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0) end)
+    JumpBtn.MouseButton1Down:Connect(function() VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game) end)
+    JumpBtn.MouseButton1Up:Connect(function() VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game) end)
+
+    -- [[ JOYSTICK ]]
+    local JoyFrame = Instance.new("Frame", ScreenGui); JoyFrame.Size = UDim2.new(0, 130, 0, 130); JoyFrame.Position = UDim2.new(0.05, 0, 0.55, 0); JoyFrame.BackgroundColor3 = Color3.fromRGB(90, 15, 15); JoyFrame.BackgroundTransparency = 0.5; Instance.new("UICorner", JoyFrame).CornerRadius = UDim.new(1, 0)
+    local Stick = Instance.new("TextButton", JoyFrame); Stick.Size = UDim2.new(0, 70, 0, 70); Stick.AnchorPoint = Vector2.new(0.5, 0.5); Stick.Position = UDim2.new(0.5, 0, 0.5, 0); Stick.BackgroundColor3 = Color3.new(1, 1, 1); Stick.BackgroundTransparency = 0.2; Stick.Text = ""; Stick.Modal = true; Instance.new("UICorner", Stick).CornerRadius = UDim.new(1, 0)
+
+    local dragging, dInput, dStart, sPos = false, nil, nil, nil
+    local curKeys = {W = false, A = false, S = false, D = false}
+    local function upKeys(nk) for k, v in pairs(nk) do if curKeys[k] ~= v then curKeys[k] = v; VIM:SendKeyEvent(v, Enum.KeyCode[k], false, game) end end end
+    Stick.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dStart = i.Position; sPos = Stick.Position; dInput = i local c; c = i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then dragging = false; Stick.Position = UDim2.new(0.5,0,0.5,0); upKeys({W=false,A=false,S=false,D=false}); c:Disconnect() end end) end end)
+    Stick.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement) then dInput = i end end)
+    
+    -- [[ CORE ENGINE ]]
+    RunService.RenderStepped:Connect(function()
+        if dragging and dInput then
+            local delta = dInput.Position - dStart; Stick.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + delta.X, sPos.Y.Scale, sPos.Y.Offset + delta.Y)
+            local diff = (Stick.AbsolutePosition + Stick.AbsoluteSize/2) - (JoyFrame.AbsolutePosition + JoyFrame.AbsoluteSize/2)
+            local dir = (diff.Magnitude > 20) and diff.Unit or Vector2.new(0,0)
+            upKeys({W = dir.Y < -0.35, S = dir.Y > 0.35, A = dir.X < -0.35, D = dir.X > 0.35})
+        end
+        
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+
+        if slActive and root and hum and hum.Health > 0 then
+            hum.AutoRotate = false
+            local camLook = Camera.CFrame.LookVector
+            local targetRotation = CFrame.new(root.Position, root.Position + Vector3.new(camLook.X, 0, camLook.Z))
+            root.CFrame = root.CFrame:Lerp(targetRotation, 0.25)
+            hum.CameraOffset = hum.CameraOffset:Lerp(Vector3.new(1.7, 0.5, 0), 0.1)
+            UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
+        elseif hum then
+            hum.AutoRotate = true
+            hum.CameraOffset = hum.CameraOffset:Lerp(Vector3.new(0, 0, 0), 0.1)
+            if not slActive then UIS.MouseBehavior = Enum.MouseBehavior.Default end
+        end
+    end)
+end
+
+CreateMobileControls()
